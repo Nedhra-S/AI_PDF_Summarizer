@@ -1,4 +1,3 @@
-
 import streamlit as st
 from pypdf import PdfReader
 import ollama
@@ -6,7 +5,17 @@ import re
 
 
 # ============================================================
-# PAGE SETTINGS
+# CONFIGURATION
+# ============================================================
+
+MODEL = "qwen2.5:3b"
+
+DEMO_USERNAME = "admin"
+DEMO_PASSWORD = "1234"
+
+
+# ============================================================
+# PAGE CONFIGURATION
 # ============================================================
 
 st.set_page_config(
@@ -14,21 +23,6 @@ st.set_page_config(
     page_icon="📄",
     layout="wide"
 )
-
-
-# ============================================================
-# LOGIN DETAILS
-# ============================================================
-
-USERNAME = "admin"
-PASSWORD = "1234"
-
-
-# ============================================================
-# OLLAMA MODEL
-# ============================================================
-
-MODEL = "qwen2.5:3b"
 
 
 # ============================================================
@@ -47,8 +41,39 @@ if "pdf_name" not in st.session_state:
 if "page_count" not in st.session_state:
     st.session_state.page_count = 0
 
-if "result" not in st.session_state:
-    st.session_state.result = ""
+if "document_type" not in st.session_state:
+    st.session_state.document_type = ""
+
+if "summary" not in st.session_state:
+    st.session_state.summary = ""
+
+if "key_points" not in st.session_state:
+    st.session_state.key_points = ""
+
+
+# ============================================================
+# LOGOUT FUNCTION
+# ============================================================
+
+def logout():
+    """
+    Completely clear the current document and AI results.
+    """
+
+    st.session_state.logged_in = False
+
+    # Clear uploaded PDF information
+    st.session_state.pdf_text = ""
+    st.session_state.pdf_name = ""
+    st.session_state.page_count = 0
+
+    # Clear AI results
+    st.session_state.document_type = ""
+    st.session_state.summary = ""
+    st.session_state.key_points = ""
+
+    # Restart the page
+    st.rerun()
 
 
 # ============================================================
@@ -56,21 +81,24 @@ if "result" not in st.session_state:
 # ============================================================
 
 def ask_ollama(prompt):
-
-    response = ollama.chat(
-        model=MODEL,
-        messages=[
-            {
-                "role": "user",
-                "content": prompt
+    try:
+        response = ollama.chat(
+            model=MODEL,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            options={
+                "temperature": 0.1
             }
-        ],
-        options={
-            "temperature": 0.1
-        }
-    )
+        )
 
-    return response["message"]["content"].strip()
+        return response["message"]["content"].strip()
+
+    except Exception as e:
+        return f"ERROR: {str(e)}"
 
 
 # ============================================================
@@ -79,46 +107,17 @@ def ask_ollama(prompt):
 
 def detect_document_type(text):
 
-    # --------------------------------------------------------
-    # Use the beginning and end of the ORIGINAL document.
-    # These areas usually contain strong structural clues.
-    # --------------------------------------------------------
-
     words = text.split()
 
     first_part = " ".join(words[:2500])
-
     last_part = " ".join(words[-1200:])
 
-    detection_text = f"""
-BEGINNING OF DOCUMENT:
-
-{first_part}
-
-END OF DOCUMENT:
-
-{last_part}
-"""
+    sample = first_part + "\n\n" + last_part
 
     prompt = f"""
-You are a professional document classification system.
+You are a document classification system.
 
-Your task is to identify the type of the document.
-
-Use ONLY the document content provided below.
-
-Do NOT use outside knowledge.
-
-Do NOT guess based on a single word.
-
-Look at the overall purpose, structure, headings, writing style,
-and the type of information contained in the document.
-
-============================================================
-AVAILABLE CATEGORIES
-============================================================
-
-Choose EXACTLY ONE:
+Classify the following PDF into exactly ONE of these categories:
 
 1. Lecture Notes
 2. Resume / CV
@@ -130,205 +129,83 @@ Choose EXACTLY ONE:
 8. Business Document
 9. Other
 
-============================================================
-CLASSIFICATION RULES
-============================================================
+Use the actual structure and content of the document.
 
-LECTURE NOTES:
-Use this when the document appears to be notes taken from
-a lecture, classroom teaching, seminar, or lesson.
+Classification rules:
 
-Typical clues:
-- lecture topics
-- classroom concepts
-- teacher explanations
-- topic headings
-- notes written for a particular lecture
-- definitions and explanations of concepts
+Lecture Notes:
+- classroom notes
+- lecture headings
+- concepts explained for students
+- professor/teacher notes
+- course topics
 
-Do NOT choose this merely because the document contains
-educational information.
-
-------------------------------------------------------------
-
-RESUME / CV:
-Use this when the document is about a person's professional
-or academic background.
-
-Typical clues:
-- person's name and contact information
-- career objective/profile
+Resume / CV:
 - education
-- work experience
 - skills
+- work experience
 - projects
-- certifications
-- achievements
+- career profile
+- contact information
 
-------------------------------------------------------------
-
-GUIDELINES / INSTRUCTIONS:
-Use this when the main purpose is to tell someone HOW to do
-something or what rules/steps/requirements to follow.
-
-Typical clues:
-- steps
-- procedures
+Guidelines / Instructions:
 - rules
-- requirements
-- do/don't instructions
-- operating instructions
-- policies or guidance
+- procedures
+- steps
+- instructions
+- policies
+- recommendations for performing an activity
 
-------------------------------------------------------------
-
-RESEARCH PAPER:
-Use this when the document presents formal academic research.
-
-Strong clues include:
+Research Paper:
 - abstract
-- introduction
-- research question/problem
-- methodology/methods
-- experiments or data collection
+- methodology
+- literature review
+- research question
+- experiments
 - results
 - discussion
-- conclusion
-- references/citations
+- references
 
-A document should NOT be classified as a research paper
-simply because it discusses an academic topic.
-
-------------------------------------------------------------
-
-REPORT:
-Use this when the main purpose is to formally present
-findings, observations, progress, events, activities,
-results, status, or an investigation.
-
-Typical clues:
-- executive summary
+Report:
+- formal report structure
 - findings
-- observations
 - analysis
 - recommendations
-- project status
-- incident/event information
-- formal reporting structure
+- executive summary
+- organizational or technical reporting
 
-------------------------------------------------------------
-
-STUDY MATERIAL:
-Use this when the document is specifically prepared to help
-students learn, revise, or prepare for an examination.
-
-Typical clues:
-- study notes
-- revision material
+Study Material:
+- educational material
+- textbook-like explanations
 - exam preparation
+- definitions
+- learning content
 - questions and answers
-- important questions
-- learning material
-- educational explanations arranged for study
 
-IMPORTANT:
-General educational content is NOT automatically study material.
-Use the document's purpose and structure.
+Article:
+- journalistic or general informational article
+- topic-based discussion
+- explanatory article
 
-------------------------------------------------------------
+Business Document:
+- business plans
+- proposals
+- meeting documents
+- company documents
+- business correspondence
 
-ARTICLE:
-Use this when the document is primarily a standalone article
-explaining, discussing, or informing readers about a topic.
+Other:
+- if none of the above fits clearly
 
-Typical clues:
-- article-style headings
-- continuous explanatory prose
-- introduction/body/conclusion
-- informational or opinion-based discussion
-- written primarily for general readers
+Return ONLY the category name.
 
-------------------------------------------------------------
-
-BUSINESS DOCUMENT:
-Use this when the main purpose is related to business,
-organizations, companies, or professional operations.
-
-Examples:
-- business proposal
-- business plan
-- company memo
-- meeting document
-- corporate document
-- marketing/business strategy
-- commercial document
-
-------------------------------------------------------------
-
-OTHER:
-Use this when none of the categories accurately describe
-the document.
-
-============================================================
-IMPORTANT DECISION RULES
-============================================================
-
-1. Identify the PURPOSE of the document first.
-
-2. Look at the STRUCTURE of the document.
-
-3. Consider multiple clues rather than one keyword.
-
-4. Do not classify a document as Research Paper just because
-   it has academic terminology.
-
-5. Do not classify a document as Lecture Notes just because
-   it contains educational concepts.
-
-6. Do not classify a document as Study Material just because
-   it is related to education.
-
-7. Do not classify a document as Report just because it has
-   headings and paragraphs.
-
-8. Choose Other when there is not enough evidence.
-
-9. Return ONLY ONE category name.
-
-10. Do NOT explain your answer.
-
-============================================================
-DOCUMENT
-============================================================
-
-{detection_text}
-
-============================================================
-ANSWER
-============================================================
-
-Return exactly one of these:
-
-Lecture Notes
-Resume / CV
-Guidelines / Instructions
-Research Paper
-Report
-Study Material
-Article
-Business Document
-Other
+DOCUMENT:
+{sample}
 """
 
     result = ask_ollama(prompt)
 
-    # --------------------------------------------------------
-    # Clean the AI response
-    # --------------------------------------------------------
-
-    result = result.strip()
-
-    valid_types = [
+    allowed_types = [
         "Lecture Notes",
         "Resume / CV",
         "Guidelines / Instructions",
@@ -340,15 +217,7 @@ Other
         "Other"
     ]
 
-    # Exact match first
-    for document_type in valid_types:
-
-        if result.lower() == document_type.lower():
-            return document_type
-
-    # Search inside response if Qwen added extra text
-    for document_type in valid_types:
-
+    for document_type in allowed_types:
         if document_type.lower() in result.lower():
             return document_type
 
@@ -356,7 +225,7 @@ Other
 
 
 # ============================================================
-# SPLIT COMPLETE DOCUMENT INTO CHUNKS
+# TEXT SPLITTING
 # ============================================================
 
 def split_text(text, chunk_size=7000):
@@ -365,47 +234,29 @@ def split_text(text, chunk_size=7000):
 
     chunks = []
 
-    current_chunk = []
-    current_length = 0
-
-    for word in words:
-
-        current_chunk.append(word)
-        current_length += len(word) + 1
-
-        if current_length >= chunk_size:
-
-            chunks.append(
-                " ".join(current_chunk)
-            )
-
-            current_chunk = []
-            current_length = 0
-
-    if current_chunk:
-
-        chunks.append(
-            " ".join(current_chunk)
-        )
+    for i in range(0, len(words), chunk_size):
+        chunk = " ".join(words[i:i + chunk_size])
+        chunks.append(chunk)
 
     return chunks
 
 
 # ============================================================
-# READ IMPORTANT INFORMATION FROM EACH CHUNK
+# ANALYZE DOCUMENT SECTION
 # ============================================================
 
-def analyze_chunk(chunk, chunk_number, total_chunks):
+def analyze_chunk(chunk, section_number, total_sections):
 
     prompt = f"""
-You are analyzing section {chunk_number} of {total_chunks}
-of a larger PDF document.
+You are analyzing section {section_number} of {total_sections}
+of a PDF document.
 
-Read this section carefully.
+Extract the most important information from this section.
 
-Extract the IMPORTANT INFORMATION from this section.
+Include only information that actually appears in the document.
 
-Include:
+Focus on:
+
 - important concepts
 - definitions
 - facts
@@ -418,20 +269,15 @@ Include:
 - conclusions
 - important relationships between ideas
 
-Do NOT invent information.
+Do NOT write a general summary.
 
-Do NOT add outside knowledge.
+Do NOT repeat the same point using different wording.
 
-Do NOT write a general summary only.
-
-Create a compact information record that preserves
-specific details from this section.
+Use concise bullet points.
 
 SECTION:
 
 {chunk}
-
-IMPORTANT INFORMATION:
 """
 
     return ask_ollama(prompt)
@@ -441,123 +287,90 @@ IMPORTANT INFORMATION:
 # FINAL SUMMARY + KEY POINTS
 # ============================================================
 
-def final_analysis(information_sections):
+def final_analysis(information_sections, document_type):
 
-    combined = "\n\n".join(
-        [
-            f"SECTION {i + 1} INFORMATION:\n{info}"
-            for i, info in enumerate(information_sections)
-        ]
-    )
+    combined_information = "\n\n".join(information_sections)
 
     prompt = f"""
-You are the final analyzer of a complete PDF document.
+You are creating the final analysis of a PDF document.
 
-The information below was extracted from ALL sections
-of the original document.
+Document type:
+{document_type}
 
-Use ONLY this information.
+Below are important facts and concepts extracted from all sections
+of the document.
 
-Do not invent facts.
-Do not use outside knowledge.
-
-Your task is to create TWO different outputs.
-
-==================================================
-SUMMARY
-==================================================
-
-Write a concise overall summary of the COMPLETE document.
-
-The summary should answer:
-
-- What is this document about?
-- What is its main purpose?
-- What are its major topics or ideas?
-- What are the important overall conclusions?
-
-Write the summary as normal paragraphs.
-
-The summary should describe the document as a whole.
-
-DO NOT make the summary a numbered list.
-
-==================================================
-KEY POINTS
-==================================================
-
-Create 8 to 12 DISTINCT key points.
-
-These must be SPECIFIC pieces of information from
-the document.
-
-A key point can contain:
-
-- a definition
-- a specific fact
-- a date
-- a number
-- an important concept
-- a particular instruction
-- an example
-- a finding
-- a specific relationship
-- an important conclusion
-
-IMPORTANT:
-
-The key points must NOT simply repeat the summary.
-
-The summary gives the BIG PICTURE.
-
-The key points give SPECIFIC DETAILS.
-
-Every key point should add useful information.
-
-Avoid duplicate points.
-
-Return the key points as a numbered list.
-
-==================================================
-OUTPUT FORMAT
-==================================================
+Create TWO separate outputs:
 
 SUMMARY:
-[overall paragraph summary]
+Write a clear, complete summary of the entire document.
+Use connected paragraphs.
+Cover the major ideas and conclusions.
+Do not unnecessarily repeat individual facts.
 
 KEY POINTS:
-1. [specific important detail]
-2. [specific important detail]
-3. [specific important detail]
-4. [specific important detail]
-5. [specific important detail]
-6. [specific important detail]
-7. [specific important detail]
-8. [specific important detail]
+Create 8 to 12 important points.
+Each point must contain a distinct piece of information.
+Do not simply copy sentences from the summary.
+Do not repeat the same idea.
 
-==================================================
-SOURCE INFORMATION
-==================================================
+Important:
+- Use ONLY information supported by the extracted content.
+- Do not invent information.
+- Do not add outside knowledge.
 
-{combined}
+Return exactly in this format:
+
+SUMMARY:
+[summary]
+
+KEY POINTS:
+1. [point]
+2. [point]
+3. [point]
+...
+
+EXTRACTED INFORMATION:
+
+{combined_information}
 """
 
-    return ask_ollama(prompt)
+    result = ask_ollama(prompt)
+
+    summary = ""
+    key_points = ""
+
+    if "KEY POINTS:" in result:
+
+        parts = result.split("KEY POINTS:", 1)
+
+        summary_part = parts[0]
+
+        if "SUMMARY:" in summary_part:
+            summary = summary_part.split("SUMMARY:", 1)[1].strip()
+        else:
+            summary = summary_part.strip()
+
+        key_points = parts[1].strip()
+
+    else:
+        summary = result
+        key_points = "Key points could not be separated automatically."
+
+    return summary, key_points
 
 
 # ============================================================
 # LOGIN PAGE
 # ============================================================
 
-if not st.session_state.logged_in:
+def login_page():
 
     st.title("🤖 AI PDF Summarizer")
 
-    st.subheader("🔐 Login")
+    st.subheader("Login")
 
-    st.write(
-        "Enter your username and password to continue."
-    )
+    st.write("Enter your credentials to continue.")
 
     username = st.text_input(
         "Username"
@@ -569,35 +382,40 @@ if not st.session_state.logged_in:
     )
 
     if st.button(
-        "🔑 Login",
+        "Login",
+        type="primary",
         use_container_width=True
     ):
 
         if (
-            username == USERNAME
-            and password == PASSWORD
+            username == DEMO_USERNAME
+            and password == DEMO_PASSWORD
         ):
 
             st.session_state.logged_in = True
 
-            st.success(
-                "✅ Login successful!"
-            )
+            # Make sure every previous document is cleared
+            st.session_state.pdf_text = ""
+            st.session_state.pdf_name = ""
+            st.session_state.page_count = 0
+            st.session_state.document_type = ""
+            st.session_state.summary = ""
+            st.session_state.key_points = ""
+
+            st.success("Login successful!")
 
             st.rerun()
 
         else:
 
-            st.error(
-                "❌ Incorrect username or password."
-            )
+            st.error("Invalid username or password.")
 
 
 # ============================================================
 # MAIN APPLICATION
 # ============================================================
 
-else:
+def main_app():
 
     # --------------------------------------------------------
     # HEADER
@@ -606,375 +424,281 @@ else:
     col1, col2 = st.columns([5, 1])
 
     with col1:
-
-        st.title("🤖 AI PDF Summarizer")
-
-        st.write(
-            "Upload a PDF and analyze the complete document "
-            "using local AI."
+        st.title("📄 AI PDF Summarizer")
+        st.caption(
+            "Summarize PDF documents using local AI with Ollama and Qwen 2.5."
         )
 
     with col2:
 
         if st.button(
-            "🚪 Logout",
+            "Logout",
             use_container_width=True
         ):
-
-            st.session_state.logged_in = False
-
-            st.rerun()
+            logout()
 
     st.divider()
 
+    # --------------------------------------------------------
+    # INFORMATION
+    # --------------------------------------------------------
+
+    st.info(
+        "Upload a PDF to extract its content, detect the document type, "
+        "generate a complete summary, and identify key points."
+    )
 
     # --------------------------------------------------------
     # PDF UPLOAD
     # --------------------------------------------------------
 
-    st.subheader("📄 Upload PDF")
-
     uploaded_file = st.file_uploader(
-        "Choose a PDF file",
-        type=["pdf"],
-        help="Upload a text-based PDF."
+        "Upload your PDF",
+        type=["pdf"]
     )
+
+    # --------------------------------------------------------
+    # PROCESS PDF
+    # --------------------------------------------------------
 
     if uploaded_file is not None:
 
-        st.info(
-            f"Selected file: **{uploaded_file.name}**"
-        )
+        # Only process when a new PDF is selected
+        if uploaded_file.name != st.session_state.pdf_name:
 
-        if st.button(
-            "📤 Upload PDF",
-            use_container_width=True
-        ):
+            # Clear previous results before processing a new PDF
+            st.session_state.pdf_text = ""
+            st.session_state.pdf_name = ""
+            st.session_state.page_count = 0
+            st.session_state.document_type = ""
+            st.session_state.summary = ""
+            st.session_state.key_points = ""
+
+            progress = st.progress(0)
+
+            status = st.empty()
+
+            # ----------------------------------------------
+            # Extract PDF text
+            # ----------------------------------------------
+
+            status.write("📖 Reading PDF...")
 
             try:
 
-                reader = PdfReader(
-                    uploaded_file
-                )
+                reader = PdfReader(uploaded_file)
 
-                full_text = ""
+                page_count = len(reader.pages)
 
-                # Read EVERY PAGE
-                for page_number, page in enumerate(
-                    reader.pages,
-                    start=1
-                ):
+                extracted_pages = []
+
+                for i, page in enumerate(reader.pages):
 
                     page_text = page.extract_text()
 
                     if page_text:
+                        extracted_pages.append(page_text)
 
-                        full_text += (
-                            f"\n\n--- PAGE {page_number} ---\n\n"
-                        )
-
-                        full_text += page_text
-
-                # --------------------------------------------
-                # CHECK TEXT
-                # --------------------------------------------
-
-                if not full_text.strip():
-
-                    st.error(
-                        "❌ No readable text was found "
-                        "in this PDF."
+                    progress_value = int(
+                        ((i + 1) / page_count) * 30
                     )
 
-                else:
+                    progress.progress(progress_value)
 
-                    st.session_state.pdf_text = (
-                        full_text
-                    )
-
-                    st.session_state.pdf_name = (
-                        uploaded_file.name
-                    )
-
-                    st.session_state.page_count = (
-                        len(reader.pages)
-                    )
-
-                    st.session_state.result = ""
-
-                    st.success(
-                        "✅ PDF uploaded successfully!"
-                    )
-
-                    st.write(
-                        f"📑 **Pages:** "
-                        f"{len(reader.pages)}"
-                    )
-
-                    st.write(
-                        f"📝 **Characters extracted:** "
-                        f"{len(full_text):,}"
-                    )
+                full_text = "\n\n".join(extracted_pages)
 
             except Exception as e:
 
                 st.error(
-                    f"❌ Error reading PDF: {e}"
+                    f"Could not read the PDF: {e}"
                 )
 
+                return
 
-    # --------------------------------------------------------
-    # DOCUMENT INFORMATION
-    # --------------------------------------------------------
-
-    if st.session_state.pdf_text:
-
-        st.divider()
-
-        st.subheader("📋 Document Information")
-
-        st.write(
-            f"**File:** "
-            f"{st.session_state.pdf_name}"
-        )
-
-        st.write(
-            f"**Pages:** "
-            f"{st.session_state.page_count}"
-        )
-
-        st.write(
-            f"**Characters extracted:** "
-            f"{len(st.session_state.pdf_text):,}"
-        )
-
-
-        # ----------------------------------------------------
-        # ANALYZE COMPLETE PDF
-        # ----------------------------------------------------
-
-        st.subheader("✨ AI Analysis")
-
-        if st.button(
-            "⚡ Analyze Complete PDF",
-            use_container_width=True
-        ):
-
-            text = st.session_state.pdf_text
-
-            try:
-
-                # ==========================================
-                # STEP 1: DOCUMENT TYPE
-                # ==========================================
-
-                with st.spinner(
-                    "🔎 Identifying document type..."
-                ):
-
-                    document_type = detect_document_type(
-                        text
-                    )
-
-
-                # ==========================================
-                # STEP 2: SPLIT COMPLETE DOCUMENT
-                # ==========================================
-
-                chunks = split_text(
-                    text,
-                    chunk_size=7000
-                )
-
-                st.write(
-                    f"📚 The complete document has been "
-                    f"divided into **{len(chunks)} sections**."
-                )
-
-                information_sections = []
-
-                progress_bar = st.progress(0)
-
-
-                # ==========================================
-                # STEP 3: PROCESS EVERY SECTION
-                # ==========================================
-
-                for i, chunk in enumerate(chunks):
-
-                    with st.spinner(
-                        f"🤖 Reading section "
-                        f"{i + 1} of {len(chunks)}..."
-                    ):
-
-                        information = analyze_chunk(
-                            chunk,
-                            i + 1,
-                            len(chunks)
-                        )
-
-                        information_sections.append(
-                            information
-                        )
-
-                    progress_bar.progress(
-                        (i + 1) / len(chunks)
-                    )
-
-
-                # ==========================================
-                # STEP 4: FINAL SUMMARY + KEY POINTS
-                # ==========================================
-
-                with st.spinner(
-                    "🧠 Creating summary and key points..."
-                ):
-
-                    result = final_analysis(
-                        information_sections
-                    )
-
-
-                # ==========================================
-                # STORE EVERYTHING
-                # ==========================================
-
-                st.session_state.result = result
-
-                st.session_state.document_type = (
-                    document_type
-                )
-
-                st.success(
-                    "✅ Complete PDF analysis finished!"
-                )
-
-            except Exception as e:
+            if not full_text.strip():
 
                 st.error(
-                    f"❌ AI error: {e}"
+                    "No readable text was found in this PDF."
                 )
 
+                return
+
+            # ----------------------------------------------
+            # Save PDF information
+            # ----------------------------------------------
+
+            st.session_state.pdf_text = full_text
+            st.session_state.pdf_name = uploaded_file.name
+            st.session_state.page_count = page_count
+
+            # ----------------------------------------------
+            # Detect document type
+            # ----------------------------------------------
+
+            status.write("🔍 Detecting document type...")
+
+            progress.progress(40)
+
+            document_type = detect_document_type(
+                full_text
+            )
+
+            st.session_state.document_type = document_type
+
+            # ----------------------------------------------
+            # Split document
+            # ----------------------------------------------
+
+            status.write("📚 Processing complete document...")
+
+            chunks = split_text(
+                full_text,
+                chunk_size=7000
+            )
+
+            total_chunks = len(chunks)
+
+            information_sections = []
+
+            # ----------------------------------------------
+            # Analyze chunks
+            # ----------------------------------------------
+
+            for index, chunk in enumerate(chunks):
+
+                section_number = index + 1
+
+                status.write(
+                    f"🤖 Analyzing section {section_number} "
+                    f"of {total_chunks}..."
+                )
+
+                section_result = analyze_chunk(
+                    chunk,
+                    section_number,
+                    total_chunks
+                )
+
+                information_sections.append(
+                    section_result
+                )
+
+                progress_value = 40 + int(
+                    ((index + 1) / total_chunks) * 40
+                )
+
+                progress.progress(progress_value)
+
+            # ----------------------------------------------
+            # Final analysis
+            # ----------------------------------------------
+
+            status.write(
+                "📝 Creating final summary and key points..."
+            )
+
+            progress.progress(90)
+
+            summary, key_points = final_analysis(
+                information_sections,
+                document_type
+            )
+
+            st.session_state.summary = summary
+            st.session_state.key_points = key_points
+
+            progress.progress(100)
+
+            status.success(
+                "✅ PDF processing completed!"
+            )
+
+            st.rerun()
 
     # ========================================================
-    # RESULTS
+    # DISPLAY CURRENT DOCUMENT
     # ========================================================
 
-    if st.session_state.result:
+    if st.session_state.pdf_name:
 
         st.divider()
 
-        st.subheader(
-            "📊 AI Analysis Results"
-        )
+        st.subheader("📄 Document Information")
 
+        info_col1, info_col2, info_col3 = st.columns(3)
 
-        # ----------------------------------------------------
-        # DOCUMENT TYPE
-        # ----------------------------------------------------
+        with info_col1:
+            st.write("**File**")
+            st.write(st.session_state.pdf_name)
 
-        document_type = st.session_state.get(
-            "document_type",
-            "Other"
-        )
+        with info_col2:
+            st.write("**Pages**")
+            st.write(st.session_state.page_count)
 
-        st.subheader(
-            "📂 Document Type"
-        )
-
-        st.success(
-            document_type
-        )
-
+        with info_col3:
+            st.write("**Document Type**")
+            st.write(st.session_state.document_type)
 
         # ----------------------------------------------------
         # SUMMARY
         # ----------------------------------------------------
 
-        result = st.session_state.result
+        st.divider()
 
-        summary_match = re.search(
-            r"SUMMARY:\s*(.*?)(?=\n\s*KEY POINTS:)",
-            result,
-            re.DOTALL | re.IGNORECASE
-        )
+        st.subheader("📝 Summary")
 
-        if summary_match:
-
-            summary = (
-                summary_match.group(1).strip()
-            )
-
-            st.subheader(
-                "📝 Summary"
-            )
+        if st.session_state.summary:
 
             st.write(
-                summary
+                st.session_state.summary
             )
 
             st.download_button(
-                "⬇️ Download Summary",
-                data=summary,
-                file_name="AI_Summary.txt",
+                label="⬇️ Download Summary",
+                data=st.session_state.summary,
+                file_name="summary.txt",
                 mime="text/plain",
                 use_container_width=True
             )
-
 
         # ----------------------------------------------------
         # KEY POINTS
         # ----------------------------------------------------
 
-        key_match = re.search(
-            r"KEY POINTS:\s*(.*)",
-            result,
-            re.DOTALL | re.IGNORECASE
-        )
+        st.divider()
 
-        if key_match:
+        st.subheader("🔑 Key Points")
 
-            key_points = (
-                key_match.group(1).strip()
-            )
-
-            st.subheader(
-                "🔑 Key Points"
-            )
+        if st.session_state.key_points:
 
             st.write(
-                key_points
+                st.session_state.key_points
             )
 
             st.download_button(
-                "⬇️ Download Key Points",
-                data=key_points,
-                file_name="AI_Key_Points.txt",
+                label="⬇️ Download Key Points",
+                data=st.session_state.key_points,
+                file_name="key_points.txt",
                 mime="text/plain",
                 use_container_width=True
             )
 
+    else:
 
-        # ----------------------------------------------------
-        # FALLBACK
-        # ----------------------------------------------------
+        st.write("")
+        st.info(
+            "📄 Upload a PDF above to begin."
+        )
 
-        if (
-            not summary_match
-            or not key_match
-        ):
 
-            st.warning(
-                "The AI returned a slightly different "
-                "format, so the complete response is shown below."
-            )
+# ============================================================
+# APPLICATION ENTRY POINT
+# ============================================================
 
-            st.write(result)
+if st.session_state.logged_in:
 
-            st.download_button(
-                "⬇️ Download Complete Analysis",
-                data=result,
-                file_name="AI_Document_Analysis.txt",
-                mime="text/plain",
-                use_container_width=True
-            )
+    main_app()
+
+else:
+
+    login_page()
