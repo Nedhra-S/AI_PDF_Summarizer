@@ -1,40 +1,40 @@
-# 🤖 AI PDF Summarizer
+# AI PDF Summarizer
 
-An AI-powered PDF summarization application built using **Python, Streamlit, Ollama, and Qwen 2.5**.
+An AI-powered PDF summarization application built with Python, Streamlit, Ollama, and Qwen 2.5.
 
-The application allows users to upload a PDF document, automatically identify the type of document, extract important information, and generate a concise summary and separate key points using a locally running AI model.
+The application allows users to upload PDF documents, automatically identify the document type, extract important information, and generate an AI-powered summary and separate key points.
 
----
+## Overview
 
-## 📌 Project Overview
+Reading and understanding long PDF documents can be time-consuming. This project provides a simple web-based application that helps users quickly understand the important information contained in a PDF.
 
-Reading and understanding long PDF documents can be time-consuming.
+The application:
 
-The **AI PDF Summarizer** simplifies this process by automatically processing the uploaded document and generating:
+- Accepts PDF documents through a web interface
+- Extracts text from the uploaded document
+- Detects the type of document
+- Processes the complete document
+- Identifies important information
+- Generates an AI-powered summary
+- Generates separate key points
+- Allows users to download the generated results
+- Uses Ollama for local AI processing
 
-- 📄 A complete document summary
-- 🔑 Important key points
-- 📂 Automatic document type detection
-- ⬇️ Downloadable summary
-- ⬇️ Downloadable key points
+## Features
 
-The application uses **Ollama with the Qwen 2.5 3B model**, allowing AI processing to run locally on the user's computer.
+### User Authentication
 
----
+A simple login system provides access to the application.
 
-## ✨ Features
+### PDF Upload
 
-### 🔐 Login System
-A simple login system protects access to the application.
-
-### 📄 PDF Upload
 Users can upload PDF documents directly through the Streamlit interface.
 
-### 📚 Full-Document Processing
-The application extracts text from the uploaded PDF and processes the document section by section.
+### Document Type Detection
 
-### 📂 Document Type Detection
-The application automatically identifies the document type, such as:
+The application automatically identifies the type of uploaded document.
+
+Supported document categories include:
 
 - Lecture Notes
 - Resume / CV
@@ -46,58 +46,71 @@ The application automatically identifies the document type, such as:
 - Business Document
 - Other
 
-### 📝 AI Summary
-Generates a concise summary based on the important information found throughout the document.
+### AI-Powered Summarization
 
-### 🔑 Separate Key Points
-Generates distinct key points separately from the summary to make important information easier to review.
+The application analyzes the uploaded document and generates a concise summary containing the most important information.
 
-### 🤖 Local AI Processing
-Uses **Ollama and Qwen 2.5 3B** for local AI processing.
+### Key Point Extraction
 
-### ⬇️ Download Results
+Important information is presented separately as key points to make the document easier to review.
+
+### Local AI Processing
+
+The application uses Ollama with the Qwen 2.5 3B model for local AI processing.
+
+No external AI API key is required.
+
+### Download Results
+
 Users can download:
 
 - Summary
 - Key Points
 
-### 🚪 Logout
-The logout function clears the current document and generated results so that a new session starts without displaying previous PDF information.
+### Session Management
 
----
+The application includes login and logout functionality.
 
-## 🛠️ Technologies Used
+When a user logs out, the current PDF and generated results are cleared from the application session.
+
+## Technology Stack
 
 | Technology | Purpose |
 |---|---|
 | Python | Application development |
-| Streamlit | Web application interface |
+| Streamlit | Web application framework |
 | PyPDF | PDF text extraction |
 | Ollama | Local AI model execution |
 | Qwen 2.5 3B | AI text analysis and summarization |
-| Git & GitHub | Version control and project hosting |
+| Git | Version control |
+| GitHub | Source code hosting |
 
----
-
-## 🔄 How It Works
+## System Workflow
 
 ```text
-                PDF Upload
-                    ↓
-             Text Extraction
-                    ↓
-          Document Type Detection
-                    ↓
-            Document Processing
-                    ↓
-       Important Information Extraction
-                    ↓
-          AI Analysis with Qwen
-                    ↓
-          ┌─────────┴─────────┐
-          ↓                   ↓
-       Summary           Key Points
-          ↓                   ↓
-          └─────────┬─────────┘
-                    ↓
-              Download Results
+PDF Upload
+    |
+    v
+Text Extraction
+    |
+    v
+Document Type Detection
+    |
+    v
+Document Processing
+    |
+    v
+Important Information Extraction
+    |
+    v
+AI Analysis using Qwen 2.5
+    |
+    +----------------------+
+    |                      |
+    v                      v
+Summary                Key Points
+    |                      |
+    +----------+-----------+
+               |
+               v
+       Download Results
